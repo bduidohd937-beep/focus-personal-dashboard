@@ -21,3 +21,28 @@
 .cloud-warning{padding:12px;border:1px solid #805132;background:#442a2036;border-radius:10px;color:#ffb17a}
 .cloud-footer{margin-top:15px}.cloud-top-status{color:var(--green);font-size:11px;white-space:nowrap}
 @media(max-width:500px){.cloud-card{padding:16px}.cloud-top-status{font-size:10px}.cloud-actions>.btn{flex:1}.cloud-form{max-width:100%}}
+
+/* FOCUS V2.1 — focus mode & personalization */
+:root[data-theme="violet"]{--green:#b8a0ff;--green-bg:rgba(184,160,255,.13)}
+:root[data-theme="ocean"]{--green:#61c7ef;--green-bg:rgba(97,199,239,.13)}
+:root[data-theme="amber"]{--green:#ffc574;--green-bg:rgba(255,197,116,.13)}
+.focus-mini{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}
+.focus-mini>div{display:flex;flex-direction:column;gap:4px;min-width:0;border:1px solid var(--line);border-radius:15px;background:var(--card);padding:18px}
+.focus-mini span{font-size:12px;color:var(--muted)}
+.focus-mini strong{font-size:clamp(18px,3vw,26px);line-height:1.2;letter-spacing:-.4px;overflow-wrap:anywhere}
+.focus-mini small{font-size:11px;color:var(--muted);line-height:1.45}
+.timer-hero{padding:25px;background:linear-gradient(125deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:20px;margin-top:18px}
+.timer-hero h2{font-size:24px;margin:7px 0}
+.timer-clock{font-variant-numeric:tabular-nums;text-align:center;font-weight:800;letter-spacing:4px;font-size:clamp(39px,8vw,78px);line-height:1.4;color:var(--green);padding:20px 0}
+.timer-control{display:flex;gap:14px;align-items:end;justify-content:space-between;flex-wrap:wrap}
+.timer-control label{font-size:12px;color:var(--muted);display:grid;gap:7px}
+.timer-control select,.prefs-form input,.prefs-form select{min-height:44px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);color:var(--text);max-width:100%}
+.timer-note{color:var(--muted);font-size:12px;margin:18px 0 0;line-height:1.8}
+.session-row{display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--line);padding:12px 0}
+.session-row:last-child{border-bottom:0}
+.session-row span{font-size:12px;color:var(--muted);margin-left:auto}
+.session-row strong{font-size:12px}
+.prefs-form{display:grid;gap:13px}.prefs-form .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.prefs-form label{display:grid;gap:7px;font-size:12px;color:var(--muted);min-width:0}
+.prefs-form .btn{justify-self:start}
+@media(max-width:440px){.prefs-form .fields{grid-template-columns:1fr}.timer-hero{padding:15px}.focus-mini>div{padding:13px}.timer-clock{letter-spacing:2px}}

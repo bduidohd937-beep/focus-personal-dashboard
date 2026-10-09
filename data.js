@@ -31,7 +31,7 @@ export function makeDefaultData(date=todayKey()) {
  ['논술 연습','논술','weekly',1,false],
  ['기상 관리','생활','daily',1,true],['스터디카페 도착','생활','daily',1,true],['취침 관리','생활','daily',1,true]
  ];
- return {version:1,routines:items.map(([name,category,freq,target,optional],i)=>({id:`base_${i+1}`,name,category,freq,target,optional,active:true,createdAt:date,deletedAt:null,order:i})),records:{}};
+ return {version:1,routines:items.map(([name,category,freq,target,optional],i)=>({id:`base_${i+1}`,name,category,freq,target,optional,active:true,createdAt:date,deletedAt:null,order:i})),records:{},sessions:[],preferences:{theme:'emerald',examDate:'',examName:'수능',dailyMinutesGoal:180}};
 }
 export function isAlive(r,date) {return r.createdAt<=date && (!r.deletedAt || date<r.deletedAt);}
 export function activeRoutines(data,date,{frequency,optional}={}) { return data.routines.filter(r=>r.active&&isAlive(r,date)&&(frequency===undefined||r.freq===frequency)&&(optional===undefined||r.optional===optional)).sort((a,b)=>a.order-b.order); }
@@ -85,7 +85,21 @@ export function validatedData(x) {
  });
  const records={};
  for(const [d,ar]of Object.entries(x.records)) {if(!isDay(d)||!Array.isArray(ar)||ar.length>1000||ar.some(v=>typeof v!=='string'||!ids.has(v)))throw Error(`기록 날짜 ${d}가 올바르지 않습니다.`);records[d]=[...new Set(ar)];}
- return {version:1,routines,records};
+ const rawSessions=x.sessions===undefined?[]:x.sessions;
+ if(!Array.isArray(rawSessions)||rawSessions.length>12000)throw Error('집중 기록 형식이 올바르지 않습니다.');
+ const sessionIds=new Set();
+ const sessions=rawSessions.map((v,i)=>{
+  if(!v||typeof v.id!=='string'||!/^[-_a-zA-Z0-9]{1,100}$/.test(v.id)||sessionIds.has(v.id)||!isDay(v.date)||typeof v.category!=='string'||!v.category.trim()||v.category.length>24||!Number.isInteger(v.seconds)||v.seconds<1||v.seconds>43200||typeof v.startedAt!=='string'||!Number.isFinite(Date.parse(v.startedAt))||typeof v.endedAt!=='string'||!Number.isFinite(Date.parse(v.endedAt)))throw Error('집중 기록 '+(i+1)+'에 잘못된 값이 있습니다.');
+  sessionIds.add(v.id);return {id:v.id,date:v.date,category:v.category,seconds:v.seconds,startedAt:v.startedAt,endedAt:v.endedAt};
+ });
+ const raw=x.preferences===undefined?{}:x.preferences;
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('개인화 설정 형식 오류');
+ const theme=['emerald','violet','ocean','amber'].includes(raw.theme)?raw.theme:'emerald';
+ const examDate=raw.examDate??'';
+ const examName=raw.examName??'수능';
+ const dailyMinutesGoal=raw.dailyMinutesGoal??180;
+ if((examDate!==''&&!isDay(examDate))||typeof examName!=='string'||examName.length>40||!Number.isInteger(dailyMinutesGoal)||dailyMinutesGoal<10||dailyMinutesGoal>1440)throw Error('개인화 설정 값이 올바르지 않습니다.');
+ return {version:1,routines,records,sessions,preferences:{theme,examDate,examName,dailyMinutesGoal}};
 }
 export function applyToggle(data,date,id,today=todayKey()) {
  if(date>today)throw Error('미래 날짜는 체크할 수 없습니다.');
@@ -96,3 +110,24 @@ export function applyToggle(data,date,id,today=todayKey()) {
  return {...data,records};
 }
 export const makeId = () => 'r_'+ (globalThis.crypto?.randomUUID?.().replaceAll('-','')||Math.random().toString(36).slice(2)+Date.now().toString(36));
+
+export function focusSummary(data,date=todayKey()) {
+ const result={seconds:0,byCategory:{}};
+ for(const session of data.sessions||[]){if(session.date!==date)continue;result.seconds+=session.seconds;result.byCategory[session.category]=(result.byCategory[session.category]||0)+session.seconds;}
+ return result;
+}
+export function focusRange(data,start,end,today=todayKey()){
+ const result={seconds:0,byCategory:{},days:{}};
+ const upper=end<today?end:today;
+ for(const session of data.sessions||[]){if(session.date<start||session.date>upper)continue;result.seconds+=session.seconds;result.byCategory[session.category]=(result.byCategory[session.category]||0)+session.seconds;result.days[session.date]=(result.days[session.date]||0)+session.seconds;}
+ return result;
+}
+export function examDaysLeft(target,today=todayKey()){
+ if(!target)return null;
+ if(!isDay(target))return null;
+ return Math.round((dateOnly(target).getTime()-dateOnly(today).getTime())/86400000);
+}
+export function formatDuration(seconds){
+ const minutes=Math.floor(seconds/60),hours=Math.floor(minutes/60);
+ return hours?hours+'시간 '+String(minutes%60).padStart(2,'0')+'분':minutes+'분';
+}

@@ -47,3 +47,12 @@ Until URL Configuration is set, email verification links may return to localhost
 V2 relies on an external ESM module CDN for sign-in functionality, which requires an internet connection on first load.
 
 Run `npm test` for local model + sync-logic unit tests. Actual multi-device sign-in / browser E2E must still be verified.
+
+
+## V2.1 — 집중 타이머, 통계, D-Day, 테마
+
+집중 탭에서 타이머(시작·일시정지·다시 시작·기록 저장)를 사용합니다. **기록 저장**을 선택한 측정 시간만 공부 통계 및 클라우드에 반영됩니다. 12시간/회 제한, 기기당 하나의 실행 중 타이머 지원. 타이머 자체는 기기 브라우저에 저장되며, 완료된 세션은 클라우드 동기화 대상입니다.
+
+설정 > 개인화 설정에서 에메랄드·바이올렛·오션·앰버 테마, 하루 집중 목표(분), 시험 이름·D-Day를 수정합니다. 기존 데이터 구조(version 1)와 로컬 저장 키를 유지하고, 선택 필드 `sessions`, `preferences`를 추가합니다. 오래된 백업도 유효하며 새 필드가 없으면 기본값으로 복원합니다.
+
+클라우드 동기화의 버전 충돌 시 자동 병합하지 않으며 기존 방식대로 어느 쪽을 사용할지 선택합니다. 실제 양방향 동기화 검증은 사용자 기기에서 진행해야 합니다.
