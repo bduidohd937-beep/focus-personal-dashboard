@@ -1,6 +1,6 @@
 import {validatedData,makeDefaultData} from './data.js';
 import {SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY} from './cloud-config.js';
-import {equalData,hasPersonalData,mergeSnapshots} from './sync-logic.js';
+import {equalData,hasPersonalData,mergeSnapshots,compareSnapshots} from './sync-logic.js';
 
 const META='focus.cloud.meta.v2';
 let api=null, client=null, session=null, base=null, rev=0, inflight=false, epoch=0, timer=null, poller=null;
@@ -8,7 +8,7 @@ let state={phase:'initializing',email:'',error:'',remote:null,lastSync:0};
 const refresh=()=>{if(api)api.refresh();};
 function change(patch){state={...state,...patch};refresh();}
 function readMeta(){try{return JSON.parse(localStorage.getItem(META)||'null');}catch{return null;}}
-function writeMeta(snapshot){try{localStorage.setItem(META,JSON.stringify({userId:session.user.id,revision:rev,snapshot}));}catch{}}
+function writeMeta(snapshot){try{localStorage.setItem(META,JSON.stringify({userId:session.user.id,revision:rev,snapshot,syncedAt:Date.now()}));}catch{}}
 const BACKUP_PREFIX='focus.cloud.backup.';
 function backups(){
  try{return Object.keys(localStorage).filter(k=>k.startsWith(BACKUP_PREFIX)).sort().reverse();}catch{return [];}
@@ -166,12 +166,16 @@ export function cloudPanel(){
   let body='';
   if(p==='choice'){
    const exists=!!state.remote;
-   body='<p class="cloud-note">선택 전 이 기기의 기록과 클라우드 기록은 모두 유지됩니다. 기기 기록은 자동 백업 후 변경됩니다.</p>'+
+   const comparison=exists?compareSnapshots(api.getLocal(),state.remote.payload):null;
+   const differences=comparison?'<div class="conflict-compare"><div class="compare-title"><strong>기기와 클라우드 기록 비교</strong><span>'+comparison.total+'개 차이</span></div><div class="compare-heading"><span>항목</span><span>이 기기</span><span>클라우드</span></div>'+comparison.items.map(x=>'<div class="compare-row"><span><small>'+safeHtml(x.type)+'</small>'+safeHtml(x.label)+'</span><span>'+safeHtml(x.device)+'</span><span>'+safeHtml(x.cloud)+'</span></div>').join('')+(comparison.hidden?'<p class="cloud-note">추가 '+comparison.hidden+'개 항목이 더 달라요. 먼저 JSON 백업을 확인해 주세요.</p>':'')+'</div>':'';
+   body='<p class="cloud-note">아래 기록 차이를 확인해 주세요. 선택 시 한쪽의 전체 기록을 적용합니다. 먼저 JSON 백업을 권장해요.</p>'+differences+
     '<div class="cloud-actions"><button class="btn primary" data-action="cloud-use-local">'+(exists?'이 기기 기록을 클라우드에 적용':'이 기기 기록 업로드')+'</button>'+
     (exists?'<button class="btn ghost" data-action="cloud-use-remote">클라우드 기록 가져오기</button>':'')+'</div>';
   }else if(p==='synced')body='<p class="cloud-note">마지막으로 확인된 기록이 계정에 연결되어 있어요. 다른 기기에서는 같은 계정으로 로그인하세요. 변경 사항은 약 20초마다 확인해요.</p>';
   else body='<p class="cloud-note">연결에 실패했거나 업로드 중입니다. 현재 체크 기록은 이 기기에 계속 보관돼요.</p><button class="btn ghost" data-action="cloud-retry">다시 연결</button>';
-  return '<section class="card cloud-card">'+header+'<p class="cloud-email">'+safeHtml(state.email||'로그인됨')+'</p>'+msg+body+
+  const lastTime=state.lastSync||readMeta()?.syncedAt;
+  const lastSyncInfo=lastTime?'<p class="cloud-note cloud-last">마지막 정상 동기화: '+safeHtml(new Date(lastTime).toLocaleString('ko-KR'))+'</p>':'';
+  return '<section class="card cloud-card">'+header+'<p class="cloud-email">'+safeHtml(state.email||'로그인됨')+'</p>'+lastSyncInfo+msg+body+
    '<div class="cloud-footer">'+(backups().length?'<button class="muted-btn" data-action="cloud-download-safety">최근 자동 보호본 다운로드</button> · ':'')+'<button class="muted-btn" data-action="cloud-signout">로그아웃</button></div></section>';
 }
 export async function authSubmit(form,mode){

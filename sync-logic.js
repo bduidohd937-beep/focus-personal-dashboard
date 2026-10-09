@@ -65,3 +65,40 @@ export function mergeSnapshots(baseValue,localValue,remoteValue){
    return {ok:true,merged:validatedData({version:1,routines,records,sessions,preferences}),conflicts:[]};
  }catch(error){return {ok:false,conflicts:['유효하지 않은 병합 결과: '+error.message]};}
 }
+
+
+// Human-readable comparison for the conflict resolver. Descriptions are plain data,
+// escaped by the UI before rendering.
+export function compareSnapshots(localValue,remoteValue,limit=24){
+ const local=validatedData(localValue),remote=validatedData(remoteValue);
+ const items=[];
+ let count=0;
+ const add=(type,label,device,cloud)=>{
+   count++;
+   if(items.length<limit)items.push({type,label,device,cloud});
+ };
+ const same=(a,b)=>equalData(a,b);
+ const lr=new Map(local.routines.map(x=>[x.id,x]));
+ const rr=new Map(remote.routines.map(x=>[x.id,x]));
+ const routineName=id=>lr.get(id)?.name||rr.get(id)?.name||id;
+ for(const id of new Set([...lr.keys(),...rr.keys()])){
+   const l=lr.get(id),r=rr.get(id);
+   if(!same(l,r))add('루틴',routineName(id),l?(l.deletedAt?'삭제됨':l.name+(l.active?'':' · 중지')):'없음',r?(r.deletedAt?'삭제됨':r.name+(r.active?'':' · 중지')):'없음');
+ }
+ for(const date of [...new Set([...Object.keys(local.records),...Object.keys(remote.records)])].sort().reverse()){
+   const l=new Set(local.records[date]||[]),r=new Set(remote.records[date]||[]);
+   for(const id of new Set([...l,...r])){
+     if(l.has(id)!==r.has(id))add('체크',date+' · '+routineName(id),l.has(id)?'완료':'미완료',r.has(id)?'완료':'미완료');
+   }
+ }
+ const ls=new Map(local.sessions.map(x=>[x.id,x])),rs=new Map(remote.sessions.map(x=>[x.id,x]));
+ for(const id of new Set([...ls.keys(),...rs.keys()])){
+   const l=ls.get(id),r=rs.get(id);
+   if(!same(l,r))add('집중',((l||r).date)+' · '+((l||r).category),l?Math.floor(l.seconds/60)+'분':'없음',r?Math.floor(r.seconds/60)+'분':'없음');
+ }
+ const preferenceLabels={theme:'테마',examDate:'목표 날짜',examName:'목표 이름',dailyMinutesGoal:'하루 집중 목표(분)'};
+ for(const [key,label] of Object.entries(preferenceLabels)){
+   if(!same(local.preferences[key],remote.preferences[key]))add('설정',label,String(local.preferences[key]||'미설정'),String(remote.preferences[key]||'미설정'));
+ }
+ return {total:count,items,hidden:Math.max(0,count-items.length)};
+}

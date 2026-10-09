@@ -1,6 +1,6 @@
 import {CATEGORIES,STORAGE_KEY,makeDefaultData,validatedData,todayKey,dayOfWeek,weekStart,addDays,shiftMonth,monthEnd,formatKorean,shortDate,dayStat,rangeStat,streak,weeklyItems,weeklySummary,activeRoutines,hasCheck,applyToggle,routineRate,routineWeekCount,pct,makeId,clamp,isAlive,WEEKDAYS,focusSummary,focusRange,examDaysLeft,formatDuration} from './data.js';
 import {initCloud,localChanged,cloudPanel,cloudAction,authSubmit,badge} from './cloud.js';
-import {timerPanel,timerTick,timerAction,timerStorageChanged} from './timer.js';
+import {timerPanel,timerTick,timerAction,timerStorageChanged,timerRunning} from './timer.js';
 
 const $ = q => document.querySelector(q);
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -58,13 +58,14 @@ function renderHome(){
  const tag=`<span class="tag"><span class="spark"></span> 오늘의 기록</span>`;
  const focusToday=focusSummary(data,today),prefs=data.preferences||{},dday=examDaysLeft(prefs.examDate,today);
  const goalStrip='<div class="focus-mini"><div><span>오늘 집중</span><strong>'+formatDuration(focusToday.seconds)+'</strong><small>목표 '+(prefs.dailyMinutesGoal||180)+'분</small></div><div><span>'+esc(prefs.examName||'목표일')+'</span><strong>'+(dday===null?'날짜 설정':dday>0?'D-'+dday:dday===0?'D-DAY':'D+'+Math.abs(dday))+'</strong><small>'+esc(prefs.examDate||'설정에서 지정')+'</small></div></div>';
+ const homeFocus='<section class="home-focus-bar"><div><p class="eyebrow">QUICK FOCUS</p><h2>바로 공부 시작</h2><p>과목을 고르고 타이머를 실행해.</p></div><div class="home-focus-action"><label for="homeSubject">과목 선택</label><select id="homeSubject" '+(timerRunning()?'disabled':'')+'>'+CATEGORIES.filter(x=>!['기타','생활'].includes(x)).map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('')+'</select><button class="btn primary" data-action="focus-quick-start">'+(timerRunning()?'진행 중인 집중 열기':'집중 시작 →')+'</button></div></section>';
  const checklist=`<div class="section-label"><i class="dash"></i> 매일 루틴 <span class="small-note">${day.done}/${day.total}</span></div>${renderList(today,{freq:'daily',optional:false})}
  ${weekly.length?`<div class="section-label"><i class="dash amber"></i> 주간 목표 <span class="small-note">이번 주</span></div>${renderList(today,{freq:'weekly'})}`:''}
  ${opt.length?`<div class="section-label"><i class="dash purple"></i> 생활 · 선택</div>${renderList(today,{freq:'daily',optional:true})}`:''}`;
  const weekProgress=wk.length?wk.map(x=>`<div class="progress-row"><div class="progress-top"><strong>${esc(x.routine.name)}</strong><span>${x.count} / ${x.target}회 ${x.complete?'✓':''}</span></div>${track(Math.min(x.count/x.target,1),true)}</div>`).join(''):'<div class="empty">주간 목표가 없어요.</div>';
  return `${header('YOUR DAILY FOCUS',getGreeting(),`${formatKorean(today)} · 작은 체크가 쌓여 변화를 만들어요.`,tag)}
  <section class="hero-card"><div><div class="hero-label">TODAY'S PROGRESS</div><h2>${day.total?day.done===day.total?'오늘 목표 완료!':'하나씩 완성해 나가자.':'오늘의 목표를 설정해봐.'}</h2><p>${day.total?`필수 루틴 ${day.total}개 중 ${day.done}개 완료`:'설정에서 매일 루틴을 추가할 수 있어요.'}</p></div><div class="hero-right"><div class="ring" style="--rate:${Math.round((day.rate??0)*100)}"><div class="ring-inner"><strong>${pct(day.rate===null?0:day.rate)}</strong><small>달성률</small></div></div></div></section>
- ${goalStrip}<div class="summary-grid">${miniMetric('이번 주 목표',`${wks.done}<em> / ${wks.target}</em>`,'주간 횟수 누적','◎')}${miniMetric('연속 성공',`${st}<em>일</em>`,'필수 일일 루틴 전부 완료','♨')}${miniMetric('이번 달 달성',pct(m.rate===null?0:m.rate),'오늘까지의 일일 기록','▥')}</div>
+ ${homeFocus}${goalStrip}<div class="summary-grid">${miniMetric('이번 주 목표',`${wks.done}<em> / ${wks.target}</em>`,'주간 횟수 누적','◎')}${miniMetric('연속 성공',`${st}<em>일</em>`,'필수 일일 루틴 전부 완료','♨')}${miniMetric('이번 달 달성',pct(m.rate===null?0:m.rate),'오늘까지의 일일 기록','▥')}</div>
  <div class="content-grid"><div class="stack">${card('오늘의 체크리스트',checklist,`<span class="small-note">${formatKorean(today)}</span>`)}</div><div class="stack">${card('최근 7일',bars(7,today)+`<div class="insight"><span>✦</span><span>체크하면 그래프가 바로 바뀌어요. 실제로 입력한 기록만 집계해요.</span></div>`,`<span class="small-note">일일 루틴 기준</span>`)}${card('이번 주 목표',weekProgress,`<span class="small-note">${shortDate(ws)} ~ ${shortDate(addDays(ws,6))}</span>`)}</div></div>
  <p class="footnote">연속 성공일은 필수 일일 루틴을 모두 완료한 날만 계산해요. 오늘이 미완료라면 어제까지의 기록을 기준으로 보여줘요. 선택 루틴과 주간 목표는 일일 달성률에 포함되지 않아요.</p>`;
 }
@@ -170,7 +171,17 @@ document.addEventListener('click',event=>{
  const el=event.target.closest('[data-action]');if(!el)return;
  const action=el.dataset.action,today=todayKey();
  try{
-  if(action.startsWith('timer-')){timerAction(action,$('#timerCategory')?.value,session=>save({...data,sessions:[...(data.sessions||[]),session]}),notify);render();}
+  if(action==='focus-quick-start'){
+   if(!timerRunning()){
+    const ok=timerAction('timer-start',$('#homeSubject')?.value,()=>true,notify);
+    if(!ok)return;
+   }
+   location.hash='#focus';render();
+  }
+  else if(action.startsWith('timer-')){timerAction(action,$('#timerCategory')?.value,session=>{
+   if((data.sessions||[]).some(x=>x.id===session.id))return true;
+   return save({...data,sessions:[...(data.sessions||[]),session]});
+  },notify);render();}
   else if(action==='toggle'){save(applyToggle(data,el.dataset.date,el.dataset.id,today));}
   else if(action==='pick-date'){selected=el.dataset.date;render();}
   else if(action==='prev-month'){visibleMonth=shiftMonth(visibleMonth,-1);render();}

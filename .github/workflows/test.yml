@@ -1,16 +1,30 @@
-name: FOCUS unit tests
+name: FOCUS quality checks
 on:
   push:
     branches: [main]
   pull_request:
-
 jobs:
-  test:
+  unit-and-browser:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --check app.js && node --check cloud.js && node --check sync-logic.js && node --check data.js
-      - run: npm test
+      - name: Validate JavaScript syntax
+        run: |
+          node --check app.js
+          node --check cloud.js
+          node --check sync-logic.js
+          node --check timer.js
+          node --check timer-logic.js
+          node --check data.js
+          node --check sw.js
+      - name: Run unit tests
+        run: npm test
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Browser smoke + offline test
+        run: node tests/browser.mjs
