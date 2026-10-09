@@ -131,7 +131,7 @@ export async function authSubmit(form,mode){
 }
 export async function cloudAction(action){
   if(action==='cloud-signout'){try{await client?.auth.signOut();await begin(null);}catch(e){api.notify(errText(e));}return;}
-  if(action==='cloud-retry'){if(session)await begin(session);return;}
+  if(action==='cloud-retry'){if(session)await begin(session);else if(!client)await initCloud(api);else {const r=await client.auth.getSession();if(r.error)throw r.error;await begin(r.data.session);}return;}
   if(state.phase!=='choice'||!session)return;
   if(action==='cloud-use-remote'){
     if(!state.remote)return;
@@ -150,7 +150,7 @@ export async function cloudAction(action){
 }
 export async function initCloud(handlers){
   api=handlers;
-  if(!navigator.onLine){change({phase:'guest'});return;}
+  if(!navigator.onLine){change({phase:'offline',error:'현재 오프라인입니다. 연결되면 로그인을 다시 확인할게요.'});window.addEventListener('online',()=>initCloud(handlers),{once:true});return;}
   try{
     const mod=await import('https://esm.sh/@supabase/supabase-js@2.57.2?bundle');
     client=mod.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true},global:{headers:{'x-application-name':'focus-v2'}}});
@@ -158,7 +158,7 @@ export async function initCloud(handlers){
     const {data,error}=await client.auth.getSession();
     if(error)throw error;
     await begin(data.session);
-  }catch(e){change({phase:'guest',error:errText(e)});}
+  }catch(e){change({phase:'error',error:errText(e)});}
   poller=setInterval(()=>{if(session)getLatest();},20000);
   window.addEventListener('online',()=>{if(session)getLatest();});
   window.addEventListener('focus',()=>{if(session)getLatest();});
