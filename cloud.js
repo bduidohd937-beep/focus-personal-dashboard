@@ -159,7 +159,8 @@ export async function initCloud(handlers){
     if(error)throw error;
     await begin(data.session);
   }catch(e){change({phase:'error',error:errText(e)});}
-  poller=setInterval(()=>{if(session)getLatest();},20000);
+  if(poller)clearInterval(poller);
+ poller=setInterval(()=>{if(session)getLatest();},20000);
   window.addEventListener('online',()=>{if(session)getLatest();});
   window.addEventListener('focus',()=>{if(session)getLatest();});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&session)getLatest();});
