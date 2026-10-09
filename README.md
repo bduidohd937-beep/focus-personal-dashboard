@@ -56,3 +56,15 @@ Run `npm test` for local model + sync-logic unit tests. Actual multi-device sign
 설정 > 개인화 설정에서 에메랄드·바이올렛·오션·앰버 테마, 하루 집중 목표(분), 시험 이름·D-Day를 수정합니다. 기존 데이터 구조(version 1)와 로컬 저장 키를 유지하고, 선택 필드 `sessions`, `preferences`를 추가합니다. 오래된 백업도 유효하며 새 필드가 없으면 기본값으로 복원합니다.
 
 클라우드 동기화의 버전 충돌 시 자동 병합하지 않으며 기존 방식대로 어느 쪽을 사용할지 선택합니다. 실제 양방향 동기화 검증은 사용자 기기에서 진행해야 합니다.
+
+
+## V2.2 — Essential reliability hardening
+
+Focus V2.2 intentionally **adds no new dashboard modules or unrelated widgets**. It improves existing features:
+- Offline changes remain in the browser and are retried when connectivity returns.
+- Cloud revision conflicts use a conservative **three-way merge**. Changes to different routines, daily checks, focus sessions, and preference fields can be combined automatically. Conflicting edits to the same routine or preference still require a user decision; a choice is never made silently.
+- Automatic local protection snapshots are available through **설정 → 클라우드 동기화 → 최근 자동 보호본 다운로드**, retaining up to five recent snapshots. Use the existing JSON restore control to recover a downloaded file.
+- A cloud download must persist to browser storage successfully before it can be reported as synchronized.
+- The service worker caches the app shell, and on network failure it does not incorrectly serve HTML in response to a JavaScript or CSS request.
+
+Limitations: Multi-device concurrent conflicts are still possible and must be resolved manually when edits are incompatible. Browser storage may be cleared by the operating system; periodic downloadable JSON backups remain advisable. Live production offline/failure paths should be confirmed with real devices.

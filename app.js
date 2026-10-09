@@ -18,14 +18,21 @@ let data=readSaved();
 let view=['home','focus','calendar','stats','settings'].includes(location.hash.slice(1))?location.hash.slice(1):'home';
 let selected=todayKey(),visibleMonth=todayKey().slice(0,7)+'-01',statsRange=7,editId=null,toastTimer;
 function save(next,{fromCloud=false}={}){
- data=next;
+ let persisted=false;
  try{
-   if(!storageProblem || !storageProblem.startsWith('기존 저장')){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));storageProblem='';}
-   else {storageProblem='이전 데이터에 문제가 있어 덮어쓰지 않고 있습니다. 설정에서 데이터 내보내기를 이용하세요.';}
+   if(!storageProblem || !storageProblem.startsWith('기존 저장')){
+     // Persist first: cloud downloads must never be reported as saved when the browser is full.
+     localStorage.setItem(STORAGE_KEY,JSON.stringify(next));
+     storageProblem='';persisted=true;
+   }else{
+     storageProblem='이전 데이터에 문제가 있어 덮어쓰지 않고 있습니다. 설정에서 데이터 내보내기를 이용하세요.';
+   }
  }catch(e){storageProblem='저장 실패: 저장 공간 또는 브라우저 권한을 확인하세요.';}
+ if(persisted||!fromCloud)data=next;
  render();
- if(!fromCloud && !storageProblem)localChanged();
+ if(!fromCloud && persisted)localChanged();
  if(storageProblem)notify(storageProblem);
+ return persisted;
 }
 function notify(message){const t=$('#toast');t.textContent=message;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),3400);}
 function card(title,inside,extra=''){return `<section class="card"><div class="card-head"><h2 class="card-title">${title}</h2>${extra}</div>${inside}</section>`;}

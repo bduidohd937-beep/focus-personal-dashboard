@@ -1,6 +1,6 @@
 import {validatedData,makeDefaultData} from './data.js';
 import {SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY} from './cloud-config.js';
-import {equalData,hasPersonalData} from './sync-logic.js';
+import {equalData,hasPersonalData,mergeSnapshots} from './sync-logic.js';
 
 const META='focus.cloud.meta.v2';
 let api=null, client=null, session=null, base=null, rev=0, inflight=false, epoch=0, timer=null, poller=null;
@@ -9,7 +9,35 @@ const refresh=()=>{if(api)api.refresh();};
 function change(patch){state={...state,...patch};refresh();}
 function readMeta(){try{return JSON.parse(localStorage.getItem(META)||'null');}catch{return null;}}
 function writeMeta(snapshot){try{localStorage.setItem(META,JSON.stringify({userId:session.user.id,revision:rev,snapshot}));}catch{}}
-function backup(label,payload){try{localStorage.setItem('focus.cloud.backup.'+label+'.'+Date.now(),JSON.stringify(payload));}catch{}}
+const BACKUP_PREFIX='focus.cloud.backup.';
+function backups(){
+ try{return Object.keys(localStorage).filter(k=>k.startsWith(BACKUP_PREFIX)).sort().reverse();}catch{return [];}
+}
+function backup(label,payload){
+ try{
+  const key=BACKUP_PREFIX+Date.now()+'-'+label;
+  localStorage.setItem(key,JSON.stringify(payload));
+  // Keep up to five recoverable local snapshots, not an ever-growing collection.
+  backups().slice(5).forEach(k=>localStorage.removeItem(k));
+  return true;
+ }catch{return false;}
+}
+function downloadSafetyBackup(){
+ const key=backups()[0];
+ if(!key){api.notify('저장된 자동 보호본이 없어요.');return;}
+ try{
+  const value=localStorage.getItem(key);
+  if(!value)throw Error('비어 있는 보호본입니다.');
+  const payload=validatedData(JSON.parse(value));
+  const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+  const a=document.createElement('a');
+  a.href=url;a.download='FOCUS-safety-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+  api.notify('자동 보호본을 다운로드했어요. 설정의 백업 복원으로 다시 불러올 수 있어요.');
+ }catch(e){api.notify('보호본 다운로드 실패: '+errText(e));}
+}
+const safeHtml=x=>String(x??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 function errText(e){return e&&e.message?e.message:'네트워크 또는 인증 오류가 발생했습니다.';}
 const remoteValue=async()=>{
   const result=await client.from('focus_sync_state').select('payload,revision,updated_at').eq('user_id',session.user.id).maybeSingle();
@@ -20,11 +48,34 @@ const remoteValue=async()=>{
 function fromRemote(remote){
   if(!session||!remote)return;
   const local=api.getLocal();
-  if(!equalData(local,remote.payload))backup('before-download',local);
-  base=remote.payload;rev=remote.revision;
-  writeMeta(base);
-  api.replaceLocal(remote.payload);
+  if(!equalData(local,remote.payload)&&hasPersonalData(local)&&!backup('before-download',local)){
+    change({phase:'choice',remote,error:'자동 보호본을 저장할 공간이 없어요. 먼저 JSON 백업을 다운로드하고 저장 공간을 확보해 주세요.'});
+    return;
+  }
+  if(api.replaceLocal(remote.payload)===false){
+    change({phase:'error',error:'브라우저에 클라우드 기록을 저장하지 못했어요. 저장 공간을 확인해 주세요.'});
+    return;
+  }
+  base=remote.payload;rev=remote.revision;writeMeta(base);
   change({phase:'synced',remote:null,error:'',lastSync:Date.now()});
+}
+function tryMerge(common,remote){
+  if(!common||!remote)return false;
+  const local=api.getLocal();
+  const result=mergeSnapshots(common,local,remote.payload);
+  if(!result.ok)return false;
+  if(!equalData(local,result.merged)&&!backup('before-merge',local)){
+    change({phase:'choice',remote,error:'자동 병합 전 보호본 저장에 실패했어요. 먼저 JSON 백업을 다운로드해 주세요.'});
+    return true;
+  }
+  if(api.replaceLocal(result.merged)===false){
+    change({phase:'error',error:'병합한 기록을 브라우저에 저장할 수 없어요. 저장 공간을 확인해 주세요.'});
+    return true;
+  }
+  base=remote.payload;rev=remote.revision;writeMeta(base);
+  change({phase:'syncing',remote:null,error:''});
+  schedule();
+  return true;
 }
 async function begin(nextSession){
   const myEpoch=++epoch;
@@ -43,7 +94,8 @@ async function begin(nextSession){
         base=last;rev=Number(meta.revision)||0;
         if(equalData(local,last)){fromRemote(remote);return;}
         if(remote.revision===rev){base=last;change({phase:'synced',remote:null});schedule();return;}
-        change({phase:'choice',remote,error:'기기와 클라우드 양쪽에서 변경된 기록이 있어요. 어느 쪽을 보존할지 선택해 주세요.'});return;
+        if(tryMerge(last,remote))return;
+        change({phase:'choice',remote,error:'양쪽 기기에서 같은 항목을 다르게 수정했어요. 기록을 확인하고 보존할 쪽을 선택해 주세요.'});return;
       }
       if(!hasPersonalData(local)){fromRemote(remote);return;}
       change({phase:'choice',remote,error:'처음 연결하는 기기에 별도 기록이 있어요. 자동으로 덮어쓰지 않았습니다.'});return;
@@ -61,7 +113,8 @@ async function getLatest(){
     if(!remote){if(rev===0){schedule();return;}change({phase:'choice',remote:null,error:'클라우드 기록이 없어졌어요. 새로 업로드할지 확인해 주세요.'});return;}
     if(remote.revision===rev){if(base&&!equalData(api.getLocal(),base))schedule();return;}
     if(base&&equalData(api.getLocal(),base)){fromRemote(remote);return;}
-    change({phase:'choice',remote,error:'다른 기기에서 기록이 바뀌었고, 이 기기에도 저장되지 않은 변경이 있어요.'});
+    if(base&&tryMerge(base,remote))return;
+    change({phase:'choice',remote,error:'다른 기기와 같은 항목을 다르게 수정했어요. 보존할 기록을 선택해 주세요.'});
   }catch(e){change({phase:navigator.onLine?'error':'offline',error:errText(e)});}
 }
 async function flush(){
@@ -80,7 +133,8 @@ async function flush(){
       inflight=false;
       const latest=await remoteValue();
       if(myEpoch!==epoch)return;
-      change({phase:'choice',remote:latest,error:'동시 수정이 감지되어 업로드를 중단했어요. 기록을 확인해 주세요.'});
+      if(latest&&base&&tryMerge(base,latest))return;
+      change({phase:'choice',remote:latest,error:'같은 항목을 동시에 수정하여 업로드를 중단했어요. 내용을 확인해 주세요.'});
       return;
     }
     rev=Number(row.current_revision);base=snapshot;writeMeta(snapshot);
@@ -89,7 +143,13 @@ async function flush(){
   }catch(e){if(myEpoch===epoch)change({phase:navigator.onLine?'error':'offline',error:errText(e)});}
   finally{inflight=false;}
 }
-function schedule(){if(!session||state.phase==='choice')return;clearTimeout(timer);timer=setTimeout(flush,650);}
+function schedule(){
+ if(!session||state.phase==='choice')return;
+ clearTimeout(timer);
+ if(!navigator.onLine){change({phase:'offline',error:'인터넷이 끊겨 기기에만 저장돼요. 재연결 후 동기화합니다.'});return;}
+ change({phase:'syncing',error:''});
+ timer=setTimeout(flush,650);
+}
 export function localChanged(){if(session) schedule();}
 export function badge(){const p=state.phase;return p==='synced'?'● 동기화됨':p==='syncing'?'◌ 동기화 중':p==='choice'?'! 기록 확인 필요':p==='offline'?'○ 오프라인':p==='error'?'! 연결 오류':p==='guest'?'○ 기기 저장':'◌ 준비 중';}
 export function cloudPanel(){
@@ -102,7 +162,7 @@ export function cloudPanel(){
    '<label>비밀번호<input required minlength="8" type="password" name="password" autocomplete="current-password" placeholder="8자 이상"></label>'+
    '<div class="cloud-actions"><button class="btn primary" type="submit" name="mode" value="signin">로그인</button><button class="btn ghost" type="submit" name="mode" value="signup">회원가입</button></div></form>'+
    '<p class="inline-message">첫 회원가입 시 확인 메일이 올 수 있어요. 메일 링크를 연 뒤 다시 로그인해 주세요.</p></section>';
-  let msg=state.error?'<p class="cloud-warning">'+state.error+'</p>':'';
+  let msg=state.error?'<p class="cloud-warning">'+safeHtml(state.error)+'</p>':'';
   let body='';
   if(p==='choice'){
    const exists=!!state.remote;
@@ -111,8 +171,8 @@ export function cloudPanel(){
     (exists?'<button class="btn ghost" data-action="cloud-use-remote">클라우드 기록 가져오기</button>':'')+'</div>';
   }else if(p==='synced')body='<p class="cloud-note">마지막으로 확인된 기록이 계정에 연결되어 있어요. 다른 기기에서는 같은 계정으로 로그인하세요. 변경 사항은 약 20초마다 확인해요.</p>';
   else body='<p class="cloud-note">연결에 실패했거나 업로드 중입니다. 현재 체크 기록은 이 기기에 계속 보관돼요.</p><button class="btn ghost" data-action="cloud-retry">다시 연결</button>';
-  return '<section class="card cloud-card">'+header+'<p class="cloud-email">'+(state.email||'로그인됨')+'</p>'+msg+body+
-   '<div class="cloud-footer"><button class="muted-btn" data-action="cloud-signout">로그아웃</button></div></section>';
+  return '<section class="card cloud-card">'+header+'<p class="cloud-email">'+safeHtml(state.email||'로그인됨')+'</p>'+msg+body+
+   '<div class="cloud-footer">'+(backups().length?'<button class="muted-btn" data-action="cloud-download-safety">최근 자동 보호본 다운로드</button> · ':'')+'<button class="muted-btn" data-action="cloud-signout">로그아웃</button></div></section>';
 }
 export async function authSubmit(form,mode){
   if(!client)return;
@@ -130,6 +190,7 @@ export async function authSubmit(form,mode){
   }catch(e){change({phase:'guest',error:errText(e)});api.notify(errText(e));}
 }
 export async function cloudAction(action){
+  if(action==='cloud-download-safety'){downloadSafetyBackup();return;}
   if(action==='cloud-signout'){try{await client?.auth.signOut();await begin(null);}catch(e){api.notify(errText(e));}return;}
   if(action==='cloud-retry'){if(session)await begin(session);else if(!client)await initCloud(api);else {const r=await client.auth.getSession();if(r.error)throw r.error;await begin(r.data.session);}return;}
   if(state.phase!=='choice'||!session)return;
@@ -142,7 +203,7 @@ export async function cloudAction(action){
     const remote=state.remote;
     const detail=remote?'기존 클라우드 기록이 교체됩니다. 클라우드의 이전 내용도 이 기기에 백업됩니다. 계속할까요?':'이 기기의 현재 기록을 새 클라우드에 업로드할까요?';
     if(!confirm(detail))return;
-    if(remote)backup('before-cloud-replace',remote.payload);
+    if(remote&&!backup('before-cloud-replace',remote.payload)){api.notify('기존 클라우드 보호본을 저장할 수 없어요. 먼저 저장 공간을 확보해 주세요.');return;}
     rev=remote?remote.revision:0;base=remote?remote.payload:null;
     change({phase:'syncing',remote:null,error:''});
     await flush();
