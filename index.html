@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <meta name="description" content="FOCUS · 나만의 공부와 생활 루틴 관리 대시보드" />
+  <meta name="robots" content="noindex,nofollow" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>FOCUS · Personal Dashboard</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar" aria-label="기본 메뉴">
+    <div class="brand"><div class="brand-symbol"><span></span></div><div><strong>FOCUS<span class="brand-dot">.</span></strong><small>PERSONAL DASHBOARD</small></div></div>
+    <div class="side-section-label">WORKSPACE</div>
+    <nav class="desktop-nav" id="desktopNav">
+      <a href="#home" data-nav="home"><span class="ico">⌂</span>오늘</a>
+      <a href="#calendar" data-nav="calendar"><span class="ico">▦</span>캘린더</a>
+      <a href="#stats" data-nav="stats"><span class="ico">▥</span>통계</a>
+      <a href="#settings" data-nav="settings"><span class="ico">⚙</span>설정</a>
+    </nav>
+    <div class="side-bottom"><div class="privacy-icon">⌁</div><div><b>개인 기록 보관</b><span>이 브라우저에만 저장돼요</span></div></div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><div class="top-brand"><div class="mini-mark">◉</div><b>FOCUS<span class="brand-dot">.</span></b></div><div class="top-right"><span class="today-label" id="topDate"></span><span class="avatar" title="나만의 공간">F</span></div></header>
+    <main id="app" class="main-content"><div class="loading">대시보드를 준비하고 있어요…</div></main>
+  </div>
+</div>
+<nav class="bottom-nav" aria-label="모바일 메뉴">
+<a href="#home" data-nav="home"><span>⌂</span><small>오늘</small></a>
+<a href="#calendar" data-nav="calendar"><span>▦</span><small>캘린더</small></a>
+<a href="#stats" data-nav="stats"><span>▥</span><small>통계</small></a>
+<a href="#settings" data-nav="settings"><span>⚙</span><small>설정</small></a>
+</nav>
+<dialog id="routineDialog" class="modal"><form id="routineForm"><header><div><small>MY ROUTINE</small><h2 id="routineDialogTitle">루틴 추가</h2></div><button type="button" class="round-x" data-close-dialog aria-label="닫기">×</button></header>
+<label>루틴 이름<input required id="routineName" name="name" maxlength="60" placeholder="예: 수학 오답노트 30분" /></label>
+<div class="fields"><label>분류<select name="category" id="routineCategory"><option>국어</option><option>수학</option><option>영어</option><option>탐구</option><option>논술</option><option>생활</option><option>기타</option></select></label><label>빈도<select name="freq" id="routineFreq"><option value="daily">매일</option><option value="weekly">주간</option></select></label></div>
+<label id="targetField">주간 목표 횟수<select name="target" id="routineTarget"><option value="1">주 1회</option><option value="2">주 2회</option><option value="3">주 3회</option><option value="4">주 4회</option><option value="5">주 5회</option><option value="6">주 6회</option><option value="7">주 7회</option></select></label>
+<label class="checkline"><input type="checkbox" name="optional" id="routineOptional" /> 선택 루틴 (달성률에서 제외)</label>
+<footer><button class="btn ghost" type="button" data-close-dialog>취소</button><button class="btn primary" type="submit">저장하기</button></footer></form></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
