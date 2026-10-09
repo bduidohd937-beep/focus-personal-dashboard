@@ -6,3 +6,18 @@
 @media(max-width:390px){.hero-card{padding:18px 15px;min-height:139px}.hero-card h2{font-size:19px}.hero-card p{font-size:10px}.ring{width:85px;height:85px}.ring-inner strong{font-size:20px}.ring-inner small{font-size:9px}.metric-icon{display:none}.metric-card strong{font-size:22px}.metric-card{min-height:95px;padding:13px 11px}.metric-card p{font-size:9px}.main-content{padding:21px 13px 100px}.card{padding:17px 14px}.cal-day{border-radius:8px}.calendar-days{gap:3px}.task{padding:9px 10px}.task .category{display:none}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
 [hidden]{display:none!important}
+
+/* V2 cloud auth */
+.cloud-card{margin:0 0 20px;padding:22px}
+.cloud-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.cloud-head strong{font-size:17px}
+.cloud-badge{border:1px solid var(--line);border-radius:999px;padding:5px 11px;color:var(--green);font-size:11px}
+.cloud-note{font-size:13px;color:var(--muted);margin:12px 0;line-height:1.8}
+.cloud-email{font-size:12px;color:var(--green)}
+.cloud-form{display:grid;gap:12px;margin-top:16px;max-width:460px}
+.cloud-form label{display:grid;gap:6px;color:var(--muted);font-size:12px}
+.cloud-form input{border:1px solid var(--line);background:var(--card2);color:var(--text);border-radius:12px;padding:13px;min-height:44px}
+.cloud-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.cloud-warning{padding:12px;border:1px solid #805132;background:#442a2036;border-radius:10px;color:#ffb17a}
+.cloud-footer{margin-top:15px}.cloud-top-status{color:var(--green);font-size:11px;white-space:nowrap}
+@media(max-width:500px){.cloud-card{padding:16px}.cloud-top-status{font-size:10px}.cloud-actions>.btn{flex:1}.cloud-form{max-width:100%}}

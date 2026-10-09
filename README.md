@@ -27,3 +27,23 @@ Node.js 22 이상에서 `npm test` (순수 로직 단위테스트 7개)
 - 기록을 옮기려면 설정 → JSON 백업 → 다른 기기에서 복원하세요.
 - 사용자의 공부 기록은 서버에 저장하지 않습니다. 기록이 중요한 경우 백업을 권장합니다.
 - 정적 배포용으로 구성하고 순수 로직 단위 테스트를 완료했지만, 브라우저 전체 E2E 테스트는 실행 환경의 접근 제한으로 완료하지 못했습니다.
+
+
+## FOCUS V2 — Supabase account sync
+
+This version keeps the existing V1 browser localStorage key and adds optional email/password login.
+- In **설정 > 클라우드 동기화**, create an account, confirm your email if requested, then log in.
+- First login never silently overwrites existing meaningful records. Choose to upload local records or download the cloud copy; local/cloud backups are stored before replacement.
+- Sync updates are revision-checked; concurrent edits stop and ask for a choice. Offline work stays in browser storage.
+- Another device must sign in with the **same account**. Automatic cloud checks run approximately every 20 seconds while the app is active. Real-time WebSocket sync is not implemented.
+- This is not end-to-end encrypted: Supabase stores routine data behind per-user Row Level Security.
+- The web client uses a publishable Supabase key; service-role secrets are not used.
+
+**Owner setup required for email confirmation**: In Supabase dashboard > Authentication > URL Configuration, set
+Site URL: `https://focus-personal-dashboard.vercel.app`
+and add Redirect URL: `https://focus-personal-dashboard.vercel.app/**`.
+If using GitHub Pages too, allow `https://bduidohd937-beep.github.io/focus-personal-dashboard/**`.
+Until URL Configuration is set, email verification links may return to localhost.
+V2 relies on an external ESM module CDN for sign-in functionality, which requires an internet connection on first load.
+
+Run `npm test` for local model + sync-logic unit tests. Actual multi-device sign-in / browser E2E must still be verified.

@@ -1,4 +1,5 @@
 import {CATEGORIES,STORAGE_KEY,makeDefaultData,validatedData,todayKey,dayOfWeek,weekStart,addDays,shiftMonth,monthEnd,formatKorean,shortDate,dayStat,rangeStat,streak,weeklyItems,weeklySummary,activeRoutines,hasCheck,applyToggle,routineRate,routineWeekCount,pct,makeId,clamp,isAlive,WEEKDAYS} from './data.js';
+import {initCloud,localChanged,cloudPanel,cloudAction,authSubmit,badge} from './cloud.js';
 
 const $ = q => document.querySelector(q);
 const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -15,13 +16,14 @@ function readSaved(){
 let data=readSaved();
 let view=['home','calendar','stats','settings'].includes(location.hash.slice(1))?location.hash.slice(1):'home';
 let selected=todayKey(),visibleMonth=todayKey().slice(0,7)+'-01',statsRange=7,editId=null,toastTimer;
-function save(next){
+function save(next,{fromCloud=false}={}){
  data=next;
  try{
    if(!storageProblem || !storageProblem.startsWith('기존 저장')){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));storageProblem='';}
    else {storageProblem='이전 데이터에 문제가 있어 덮어쓰지 않고 있습니다. 설정에서 데이터 내보내기를 이용하세요.';}
  }catch(e){storageProblem='저장 실패: 저장 공간 또는 브라우저 권한을 확인하세요.';}
  render();
+ if(!fromCloud && !storageProblem)localChanged();
  if(storageProblem)notify(storageProblem);
 }
 function notify(message){const t=$('#toast');t.textContent=message;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),3400);}
@@ -90,10 +92,11 @@ function renderSettings(){
  const routines=data.routines.filter(r=>!r.deletedAt).sort((a,b)=>a.order-b.order);
  const list=routines.map(r=>`<div class="setting-item"><div class="meta"><b>${esc(r.name)}</b><span>${esc(r.category)} · ${r.freq==='daily'?'매일':`주 ${r.target}회`}${r.optional?' · 선택':''}${!r.active?' · 일시 중지':''}</span></div><button type="button" role="switch" aria-checked="${r.active}" aria-label="${esc(r.name)} ${r.active?'비활성화':'활성화'}" class="switch ${r.active?'on':''}" data-action="set-active" data-id="${esc(r.id)}"></button><button class="btn-icon" data-action="edit-routine" data-id="${esc(r.id)}" title="수정" aria-label="${esc(r.name)} 수정">✎</button><button class="btn-icon" data-action="delete-routine" data-id="${esc(r.id)}" title="삭제" aria-label="${esc(r.name)} 삭제">×</button></div>`).join('')||'<div class="empty">아직 루틴이 없어요.</div>';
  return `${header('PREFERENCES','나만의 설정','루틴과 목표를 자유롭게 바꾸고 데이터를 안전하게 관리해봐.')}
- <div class="settings-grid"><div class="stack">${card('나의 루틴',list+`<button class="btn primary mt-18" data-action="new-routine">＋ 루틴 추가하기</button>`,`<span class="small-note">${routines.length}개</span>`)}</div><div class="stack">${card('데이터 보관',`<div class="info-box"><b>이 기기에서만 저장돼요.</b><br>아직 로그인이나 클라우드 동기화는 없어요. 다른 휴대폰·PC로 옮기려면 백업 파일을 내보내고 가져와야 해요. 브라우저 데이터를 삭제하면 기록도 삭제돼요.</div><div class="button-row mt-18"><button class="btn primary" data-action="export">↓ JSON 백업</button><button class="btn ghost" data-action="import">↑ 백업 복원</button></div><input id="importFile" type="file" accept=".json,application/json" hidden/><p class="inline-message mt-12">백업을 복원하면 현재 기록 전체가 교체돼요. 복원 전에 확인 창이 표시돼요.</p>`)}${card('초기화',`<div class="info-box warn"><b>주의: 기록은 복구되지 않아요.</b><br>중요한 기록이 있다면 먼저 JSON 백업을 내려받으세요.</div><button class="btn danger mt-18" data-action="reset">모든 기록 초기화</button>`)}</div></div><p class="footnote">갤럭시: Chrome 메뉴 → 홈 화면에 추가 / 앱 설치. 오프라인에서도 마지막으로 저장된 앱 화면을 열 수 있도록 구성했어요.</p>`;
+ ${cloudPanel()}<div class="settings-grid"><div class="stack">${card('나의 루틴',list+`<button class="btn primary mt-18" data-action="new-routine">＋ 루틴 추가하기</button>`,`<span class="small-note">${routines.length}개</span>`)}</div><div class="stack">${card('데이터 보관',`<div class="info-box"><b>로컬 저장 + 선택적 클라우드 동기화</b><br>체크는 이 브라우저에 먼저 저장되고, 연결되면 클라우드로 전송돼요. 정기적인 JSON 백업도 권장해요.</div><div class="button-row mt-18"><button class="btn primary" data-action="export">↓ JSON 백업</button><button class="btn ghost" data-action="import">↑ 백업 복원</button></div><input id="importFile" type="file" accept=".json,application/json" hidden/><p class="inline-message mt-12">백업을 복원하면 현재 기록 전체가 교체돼요. 복원 전에 확인 창이 표시돼요.</p>`)}${card('초기화',`<div class="info-box warn"><b>주의: 기록은 복구되지 않아요.</b><br>중요한 기록이 있다면 먼저 JSON 백업을 내려받으세요.</div><button class="btn danger mt-18" data-action="reset">모든 기록 초기화</button>`)}</div></div><p class="footnote">갤럭시: Chrome 메뉴 → 홈 화면에 추가 / 앱 설치. 오프라인에서도 마지막으로 저장된 앱 화면을 열 수 있도록 구성했어요.</p>`;
 }
 function render(){
  const today=todayKey();$('#topDate').textContent=formatKorean(today);
+ const status=$('#syncStatus');if(status)status.textContent=badge();
  document.querySelectorAll('[data-nav]').forEach(a=>{a.classList.toggle('active',a.dataset.nav===view);a.setAttribute('aria-current',a.dataset.nav===view?'page':'false');});
  const warning=storageProblem?`<div class="banner">${esc(storageProblem)}</div>`:'';
  $('#app').innerHTML=warning+({home:renderHome,calendar:renderCalendar,stats:renderStats,settings:renderSettings}[view]());
@@ -143,11 +146,13 @@ document.addEventListener('click',event=>{
   else if(action==='edit-routine'){const r=data.routines.find(r=>r.id===el.dataset.id);if(r)openDialog(r);}
   else if(action==='set-active'){save({...data,routines:data.routines.map(r=>r.id===el.dataset.id?{...r,active:!r.active}:r)});}
   else if(action==='delete-routine'){const r=data.routines.find(r=>r.id===el.dataset.id);if(r&&confirm(`‘${r.name}’ 루틴을 삭제할까요?\n지난 기록은 보존돼요.`)){save({...data,routines:data.routines.map(x=>x.id===r.id?{...x,deletedAt:today}:x)});notify('루틴을 삭제했어요.');}}
+  else if(action.startsWith('cloud-')){cloudAction(action).catch(e=>notify(e.message||'동기화 오류'));}
   else if(action==='export'){exportBackup();}
   else if(action==='import'){$('#importFile')?.click();}
   else if(action==='reset'){if(confirm('모든 루틴과 기록을 초기화할까요? 이 작업은 되돌릴 수 없어요.')&&confirm('정말 초기화할까요? 백업을 하지 않았다면 기록이 사라져요.')){storageProblem='';save(makeDefaultData());notify('기본 루틴으로 초기화했어요.');}}
  }catch(e){notify(e.message||'처리 중 오류가 발생했어요.');}
 });
+document.addEventListener('submit',event=>{if(event.target.id==='cloudAuthForm'){event.preventDefault();authSubmit(event.target,event.submitter?.value||'signin').catch(e=>notify(e.message||'로그인 오류'));}});
 document.addEventListener('change',event=>{if(event.target.id==='routineFreq')updateTargetVisibility();if(event.target.id==='importFile'){importBackup(event.target.files?.[0]);event.target.value='';}});
 document.querySelectorAll('[data-close-dialog]').forEach(btn=>btn.addEventListener('click',()=>$('#routineDialog').close()));
 $('#routineForm').addEventListener('submit',event=>{event.preventDefault();modifyRoutine(event.currentTarget);});
@@ -157,4 +162,5 @@ setInterval(()=>{const current=todayKey();if(current!==lastSeenToday){lastSeenTo
 let lastSeenToday=todayKey();
 if(!location.hash)history.replaceState(null,'','#home');
 render();
+initCloud({getLocal:()=>data,replaceLocal:d=>save(d,{fromCloud:true}),notify,refresh:render});
 if('serviceWorker' in navigator && ['https:','http:'].includes(location.protocol)){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}
